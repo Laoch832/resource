@@ -49,7 +49,12 @@ try:
             if pkg!='com.netease.cloudmusic' or expected not in candidate_log:
                 raise RuntimeError('Original app process did not remain alive '+pkg)
             original=Path('netease-official-baseline.apk')
-            urllib.request.urlretrieve('https://d1.music.126.net/dmusic/NeteaseCloudMusic_Music_official_9.6.08.261015102648_3264.apk',original)
+            baseline_parts=Path('binary-input/ci-input/baseline')
+            if baseline_parts.exists():
+                with original.open('wb') as f:
+                    for name in json.loads((baseline_parts/'parts.json').read_text()):f.write((baseline_parts/name).read_bytes())
+            else:
+                urllib.request.urlretrieve('https://d1.music.126.net/dmusic/NeteaseCloudMusic_Music_official_9.6.08.261015102648_3264.apk',original)
             assert hashlib.sha256(original.read_bytes()).hexdigest()=='4c2e8791c6d00b952332eb698837bbea72bb4384518b75fe895bd4fdccb572d3'
             command(['adb','uninstall',pkg]);command(['adb','install','--no-incremental',str(original)])
             command(['adb','logcat','-c'])
