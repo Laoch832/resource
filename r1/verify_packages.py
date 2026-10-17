@@ -15,12 +15,17 @@ def main():
         path=ROOT/'r1/build/candidates'/(stem+'-r1-candidate.apk')
         with zipfile.ZipFile(path) as z,zipfile.ZipFile(ROOT/(stem+'-original.apk')) as src:
             assert z.testzip() is None
-            preserved={'native':0,'assets':0,'dex':0}
+            preserved={'native':0,'assets':0,'dex':0,'metadata':0}
             for name in src.namelist():
                 k='native' if name.startswith('lib/') and name.endswith('.so') else 'assets' if name.startswith('assets/') and not name.endswith('/') else 'dex' if name.startswith('classes') and name.endswith('.dex') else None
                 if k and name!=changed:
                     assert sha(src.read(name))==sha(z.read(name)),name
                     preserved[k]+=1
+            from build import is_signature_entry
+            for name in src.namelist():
+                if name.startswith('META-INF/') and not is_signature_entry(name):
+                    assert src.read(name)==z.read(name),name
+                    preserved['metadata']+=1
             xml=AXMLPrinter(z.read('AndroidManifest.xml')).get_xml_obj();app=xml.find('application')
             helper=z.read(f'classes{index}.dex');helpers.append(sha(helper));classes={c.get_name() for c in DEX(helper).get_classes()}
             for c in ['HkiProfile','PartitionedConvolver','SoundAudioTrack','MpeghDecoder','MpeghPlayerActivity']:

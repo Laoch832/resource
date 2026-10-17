@@ -26,7 +26,24 @@ def compile_helpers(probe=False):
     run(['java','-cp',TOOLS/'r8.jar','com.android.tools.r8.D8','--min-api','23','--lib',R1/'android-api30.jar','--lib',jre,'--output',dex,jar],'d8.log')
     return dex/'classes.dex'
 
+def is_signature_entry(name):
+    return bool(re.match(r'^META-INF/(?:MANIFEST\.MF|[^/]+\.(?:SF|RSA|DSA|EC)|SIG-[^/]+)$', name, re.I))
+
+def preserve_upstream_metadata(apk):
+    stem=next((s for s in ['sound-connect-13.3.0','netease-9.6.08'] if apk.name.startswith(s)),None)
+    if stem is None:return
+    original=ROOT/(stem+'-original.apk')
+    temporary=apk.with_suffix('.metadata.apk')
+    with zipfile.ZipFile(original) as upstream,zipfile.ZipFile(apk) as src,zipfile.ZipFile(temporary,'w') as dst:
+        metadata={i.filename:i for i in upstream.infolist() if i.filename.startswith('META-INF/') and not is_signature_entry(i.filename)}
+        for info in src.infolist():
+            if is_signature_entry(info.filename) or info.filename in metadata:continue
+            dst.writestr(info,src.read(info.filename))
+        for name,info in metadata.items():dst.writestr(info,upstream.read(name))
+    temporary.replace(apk)
+
 def sign(apk):
+    preserve_upstream_metadata(apk)
     password=os.environ['R1_KEYSTORE_PASSWORD']
     run(['java','-jar',TOOLS/'signer.jar','-a',apk,'--ks',ROOT/'bridge/signing/research.jks','--ksAlias','bridge','--ksPass',password,'--ksKeyPass',password,'--allowResign','--overwrite'],apk.stem+'-sign.log')
     verifier=ROOT/'bridge/build/signature-check'
@@ -120,7 +137,7 @@ def refresh(dex):
         temporary=apk.with_suffix('.refreshed.apk')
         with zipfile.ZipFile(apk) as src,zipfile.ZipFile(temporary,'w') as dst:
             for info in src.infolist():
-                if info.filename.startswith('META-INF/'):continue
+                if is_signature_entry(info.filename):continue
                 data=replacements.pop(info.filename,None)
                 dst.writestr(info,data.read_bytes() if data else src.read(info.filename))
             if replacements:raise RuntimeError('Expected replacement entries missing '+str(list(replacements)))
