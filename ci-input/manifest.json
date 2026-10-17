@@ -1,0 +1,29 @@
+[
+  {
+    "file": "netease-9.6.08-r1.apk",
+    "sha256": "85c6f963647a02619eef2509b4ef07316d4147ce5aa27728bc246ad74de6932c",
+    "bytes": 240196699,
+    "parts": [
+      "netease-9.6.08-r1.apk.part000",
+      "netease-9.6.08-r1.apk.part001",
+      "netease-9.6.08-r1.apk.part002",
+      "netease-9.6.08-r1.apk.part003",
+      "netease-9.6.08-r1.apk.part004",
+      "netease-9.6.08-r1.apk.part005",
+      "netease-9.6.08-r1.apk.part006",
+      "netease-9.6.08-r1.apk.part007"
+    ]
+  },
+  {
+    "file": "sound-connect-13.3.0-r1.apk",
+    "sha256": "9b4cc2e260f4c45814181b4b0cd176ed1be98301e4528df24afd9dc389d7a783",
+    "bytes": 136567806,
+    "parts": [
+      "sound-connect-13.3.0-r1.apk.part000",
+      "sound-connect-13.3.0-r1.apk.part001",
+      "sound-connect-13.3.0-r1.apk.part002",
+      "sound-connect-13.3.0-r1.apk.part003",
+      "sound-connect-13.3.0-r1.apk.part004"
+    ]
+  }
+]
