@@ -1,4 +1,4 @@
-import subprocess,time,json,traceback
+import subprocess,time,json,traceback,hashlib,urllib.request
 from pathlib import Path
 
 out=Path('artifacts');out.mkdir(exist_ok=True)
@@ -39,12 +39,35 @@ try:
         command(['adb','shell','uiautomator','dump','/sdcard/r1-ui.xml'],check=False)
         command(['adb','pull','/sdcard/r1-ui.xml',str(out/(pkg+'-ui.xml'))],check=False)
         with (out/(pkg+'.png')).open('wb') as f:subprocess.run(['adb','exec-out','screencap','-p'],stdout=f,timeout=30,check=False)
-        if not pid:raise RuntimeError('Original app process did not remain alive '+pkg)
-    report['result']='PASS'
+        if not pid:
+            # ARM translation can fail before the app reaches its own code.
+            # Only classify this as an emulator limitation when the exact,
+            # independently downloaded official package fails identically.
+            candidate_log=command(['adb','logcat','-d'],check=False)
+            (out/'candidate-logcat.txt').write_text(candidate_log)
+            expected='No implementation found for boolean com.netease.nis.wrapper.MyJni.load'
+            if pkg!='com.netease.cloudmusic' or expected not in candidate_log:
+                raise RuntimeError('Original app process did not remain alive '+pkg)
+            original=Path('netease-official-baseline.apk')
+            urllib.request.urlretrieve('https://d1.music.126.net/dmusic/NeteaseCloudMusic_Music_official_9.6.08.261015102648_3264.apk',original)
+            assert hashlib.sha256(original.read_bytes()).hexdigest()=='4c2e8791c6d00b952332eb698837bbea72bb4384518b75fe895bd4fdccb572d3'
+            command(['adb','uninstall',pkg]);command(['adb','install','--no-incremental',str(original)])
+            command(['adb','logcat','-c'])
+            command(['adb','shell','am','start','-W','-n',entry],check=False)
+            time.sleep(12)
+            baseline_pid=command(['adb','shell','pidof',pkg],check=False).strip()
+            baseline_log=command(['adb','logcat','-d'],check=False)
+            (out/'official-baseline-logcat.txt').write_text(baseline_log)
+            report['official_baseline']={'sha256':hashlib.sha256(original.read_bytes()).hexdigest(),'process_alive':bool(baseline_pid),'same_native_load_error':expected in baseline_log}
+            if baseline_pid or expected not in baseline_log:
+                raise RuntimeError('Candidate startup differs from official baseline; real device investigation required')
+            report['limitations'].append('Both the unchanged official NetEase APK and R1 APK fail identically in MyJni.load on x86_64 ARM translation. Full NetEase startup is unverified on actual ARM hardware.')
+
+    report['result']='PASS_WITH_EMULATOR_LIMITATION' if 'official_baseline' in report else 'PASS'
 except Exception:
     report['result']='FAIL';report['error']=traceback.format_exc()
 finally:
     (out/'runtime-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
     (out/'logcat.txt').write_text(command(['adb','logcat','-d'],check=False,timeout=60))
     print(json.dumps(report,ensure_ascii=False,indent=2))
-if report['result']!='PASS':raise SystemExit(1)
+if not report['result'].startswith('PASS'):raise SystemExit(1)
