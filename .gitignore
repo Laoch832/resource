@@ -1,0 +1,8 @@
+*.jks
+*.keystore
+*.idsig
+*.apk
+!ci/r1-runtime-probe.apk
+__pycache__/
+apk/
+artifacts/

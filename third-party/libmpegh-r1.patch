@@ -1,0 +1,35 @@
+diff --git a/decoder/ia_core_coder_decode_main.c b/decoder/ia_core_coder_decode_main.c
+index 137f834..85c6564 100644
+--- a/decoder/ia_core_coder_decode_main.c
++++ b/decoder/ia_core_coder_decode_main.c
+@@ -2830,7 +2830,8 @@ IA_ERRORCODE ia_core_coder_dec_main(VOID *temp_handle, WORD8 *inbuffer, WORD8 *o
+           {
+             pstr_dec_data->binaural_handle.ptr_binaural_signal_in_renderer
+                 [pstr_dec_data->binaural_handle.channel_map[channel]][sig] =
+-                ia_div_q15_flt((pstr_dec_data->str_usac_data.time_sample_vector[channel][sig]));
++                /* R1: retain 6 dB headroom when summing virtual loudspeakers. */
++                0.5f * ia_div_q15_flt((pstr_dec_data->str_usac_data.time_sample_vector[channel][sig]));
+           }
+         }
+         WORD32 num_samples_processed;
+diff --git a/decoder/impeghd_api.c b/decoder/impeghd_api.c
+index 6414ca8..0a4b3c9 100644
+--- a/decoder/impeghd_api.c
++++ b/decoder/impeghd_api.c
+@@ -822,6 +822,16 @@ IA_ERRORCODE ia_mpegh_dec_init(pVOID p_ia_mpegh_dec_obj, pVOID pv_input, pVOID p
+       wav_info.cicp_spk_idx = p_obj_mpegh_dec->mpeghd_config.ui_cicp_layout_idx;
+     }
+ 
++    /* R1 interoperability fix: BRIR channel mapping follows the rendered target
++       layout, not the original coded channel count. After format conversion a
++       mono source can produce ten 5.1.4 speaker feeds; initializing only one map
++       entry makes subsequent feeds overwrite each other and can yield silence. */
++    if (wav_info.cicp_spk_idx > 0 && wav_info.cicp_spk_idx <= 20 &&
++        wav_info.cicp_spk_idx != 8)
++    {
++      wav_info.num_speaker_expected = impgehd_cicp_get_num_ls[wav_info.cicp_spk_idx];
++      wav_info.num_channel_is_input = wav_info.num_speaker_expected;
++    }
+     pstr_binaural_rendering->ptr_scratch =
+         p_obj_mpegh_dec->p_state_mpeghd->mpeghd_scratch_mem_v;
+     err_code = impeghd_binaural_renderer_init(pstr_binaural_rendering, &wav_info,
