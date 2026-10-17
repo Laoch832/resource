@@ -1,6 +1,7 @@
 package dev.soundconnect.r1;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.security.GeneralSecurityException;
@@ -43,6 +44,11 @@ public final class HkiProfile {
 
     public static HkiProfile parse(byte[] input) throws IOException {
         if (input.length == 0 || input.length > MAX_BYTES) throw new IOException("Invalid profile size");
+        if (!magic(input,0,"RIFF") && !magic(input,0,"hki2")) {
+            byte[] decoded=decodeMime(input);
+            if (!magic(decoded,0,"RIFF") && !magic(decoded,0,"hki2")) throw new IOException("Unsupported coefficient container");
+            return parse(decoded);
+        }
         byte[] hki = input;
         if (magic(input, 0, "RIFF")) {
             if (!magic(input, 8, "BRIR") || input.length < 20 || (i32(input, 4) & 0xffffffffL) + 8 != input.length)
@@ -101,6 +107,32 @@ public final class HkiProfile {
         }
         return new HkiProfile(rate, taps, directions);
         } finally { Arrays.fill(clear, (byte) 0); }
+    }
+
+    /** Sony's legacy profile store may contain MIME Base64 rather than raw HKI2 bytes. */
+    private static byte[] decodeMime(byte[] encoded) throws IOException {
+        ByteArrayOutputStream out=new ByteArrayOutputStream(encoded.length*3/4);
+        int[] q=new int[4];int count=0;boolean finished=false;
+        for(byte b:encoded) {
+            int c=b&255;if(c==32 || c==9 || c==10 || c==13)continue;
+            if(finished)throw new IOException("Trailing Base64 profile data");
+            int value=c>='A' && c<='Z'?c-'A':c>='a' && c<='z'?c-'a'+26:c>='0' && c<='9'?c-'0'+52:c=='+'?62:c=='/'?63:c=='='?-2:-1;
+            if(value==-1)throw new IOException("Unsupported coefficient encoding");
+            q[count++]=value;
+            if(count==4) {
+                if(q[0]<0 || q[1]<0 || (q[2]==-2 && q[3]!=-2))throw new IOException("Invalid Base64 padding");
+                out.write((q[0]<<2)|(q[1]>>4));
+                if(q[2]==-2) {if((q[1]&15)!=0)throw new IOException("Invalid Base64 bits");finished=true;}
+                else {
+                    out.write((q[1]<<4)|(q[2]>>2));
+                    if(q[3]==-2){if((q[2]&3)!=0)throw new IOException("Invalid Base64 bits");finished=true;}
+                    else out.write((q[2]<<6)|q[3]);
+                }
+                count=0;
+            }
+        }
+        if(count!=0 || out.size()==0)throw new IOException("Incomplete Base64 profile");
+        return out.toByteArray();
     }
 
     static byte[] deriveKey(int identifier, int formatVersion) throws GeneralSecurityException, IOException {

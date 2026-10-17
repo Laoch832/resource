@@ -2,7 +2,7 @@
   {
     "file": "sound-connect-13.3.0-r1.apk",
     "bytes": 136567806,
-    "sha256": "9b4cc2e260f4c45814181b4b0cd176ed1be98301e4528df24afd9dc389d7a783",
+    "sha256": "7b71c88094bce641b506a1e0b0954558786d4be37203afcea5b73ce60dbc1cf9",
     "zip_crc": "PASS",
     "upstream_preserved": {
       "native": 94,
@@ -11,13 +11,14 @@
     },
     "changed_upstream_dex": "classes3.dex",
     "new_helper_dex": 7,
+    "helper_sha256": "f231119446437846456f78eeacc0c4de0f3a0072fb256f67f141d6c434a68752",
     "manifest_label": "Sound Connect · Sony R1 验证",
     "audio_entry_hooks": 2
   },
   {
     "file": "netease-9.6.08-r1.apk",
-    "bytes": 240196699,
-    "sha256": "85c6f963647a02619eef2509b4ef07316d4147ce5aa27728bc246ad74de6932c",
+    "bytes": 240200795,
+    "sha256": "6cc0425b99776c51fccdd8e79f1464db9e1621407b9528fd4fbded91ad885207",
     "zip_crc": "PASS",
     "upstream_preserved": {
       "native": 342,
@@ -26,6 +27,7 @@
     },
     "changed_upstream_dex": "classes16.dex",
     "new_helper_dex": 21,
+    "helper_sha256": "f231119446437846456f78eeacc0c4de0f3a0072fb256f67f141d6c434a68752",
     "manifest_label": "网易云音乐 · Sony R1 验证",
     "audio_entry_hooks": {
       "Lcom/netease/cloudmusic/media/NEAudioDevice;": 2,

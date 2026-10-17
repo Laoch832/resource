@@ -1,0 +1,15 @@
+[
+  {
+    "case": "short-direct",
+    "exit_code": 0,
+    "seconds": 0.57,
+    "frames": 482304,
+    "channels": 2,
+    "peak": 10606
+  },
+  {
+    "case": "invalid-zero-energy",
+    "exit_code": 1,
+    "seconds": 0.175
+  }
+]

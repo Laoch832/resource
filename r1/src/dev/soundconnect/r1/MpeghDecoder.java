@@ -49,8 +49,13 @@ public final class MpeghDecoder {
                 try {result=decoder.exitValue();break;}catch(IllegalThreadStateException running){Thread.sleep(100);}
             }
             drain.join(2000);
-            if(result!=0)throw new IOException("MPEG-H 解码器返回错误："+result);
-            validateWav(output);
+            if(result!=0) {
+                android.util.Log.e("SonyR1","MPEG-H decoder: "+new String(log.toByteArray(),"UTF-8"));
+                throw new IOException("MPEG-H 解码器返回错误："+result);
+            }
+            try {validateWav(output);}catch(IOException e) {
+                android.util.Log.e("SonyR1","MPEG-H decoder: "+new String(log.toByteArray(),"UTF-8"),e);throw e;
+            }
             success=true;return output;
         } finally {
             Process decoder=process;if(decoder!=null)decoder.destroy();process=null;

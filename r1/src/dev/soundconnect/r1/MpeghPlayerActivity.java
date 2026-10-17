@@ -3,6 +3,7 @@ package dev.soundconnect.r1;
 import android.app.Activity;
 import android.content.Intent;
 import android.media.MediaPlayer;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.*;
@@ -16,8 +17,25 @@ public final class MpeghPlayerActivity extends Activity {
     private MediaPlayer player;
     private File rendered;
     private volatile boolean destroyed;
+    private AudioManager audio;
+    private boolean focusHeld, resumeOnFocus;
+    private final AudioManager.OnAudioFocusChangeListener focusListener=new AudioManager.OnAudioFocusChangeListener(){
+        public void onAudioFocusChange(int change){
+            if(player==null)return;
+            if(change==AudioManager.AUDIOFOCUS_GAIN){
+                focusHeld=true;
+                player.setVolume(1,1);if(resumeOnFocus){player.start();resumeOnFocus=false;}
+            }else if(change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK){player.setVolume(.2f,.2f);}
+            else if(change==AudioManager.AUDIOFOCUS_LOSS || change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT){
+                if(change==AudioManager.AUDIOFOCUS_LOSS)focusHeld=false;
+                resumeOnFocus=change==AudioManager.AUDIOFOCUS_LOSS_TRANSIENT && player.isPlaying();
+                if(player.isPlaying())player.pause();
+            }
+        }
+    };
     protected void onCreate(Bundle state) {
         super.onCreate(state);ProfileStore.initialize(this);setTitle("本机 MPEG-H / 360RA 播放");
+        audio=(AudioManager)getSystemService(AUDIO_SERVICE);setVolumeControlStream(AudioManager.STREAM_MUSIC);
         LinearLayout layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(30,30,30,30);
         TextView info=new TextView(this);
         info.setText("选择你有权播放的本机 MPEG-H MHAS / MP4 文件。使用 Sound Connect 的耳形参数，经 5.1.4 空间布局渲染为双耳音频，适合耳机聆听。准备完成后播放。网易云在线曲库是否提供原生 360RA 取决于音源服务。");layout.addView(info);
@@ -28,7 +46,12 @@ public final class MpeghPlayerActivity extends Activity {
             Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,361);
         }});layout.addView(choose);
         Button pause=new Button(this);pause.setText("暂停 / 继续");pause.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
-            if(player!=null){if(player.isPlaying())player.pause();else player.start();}
+            if(player!=null){
+                resumeOnFocus=false;
+                if(player.isPlaying())player.pause();
+                else if(focusHeld || (audio!=null && audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN)==AudioManager.AUDIOFOCUS_REQUEST_GRANTED)){focusHeld=true;player.start();}
+                else status.setText("无法取得播放焦点，请先暂停其他播放器。");
+            }
         }});layout.addView(pause);
         Button stop=new Button(this);stop.setText("停止");stop.setOnClickListener(new View.OnClickListener(){public void onClick(View v){stop();status.setText("已停止。");}});layout.addView(stop);
         setContentView(layout);
@@ -44,7 +67,8 @@ public final class MpeghPlayerActivity extends Activity {
                     if(destroyed || decoder!=job){discard(wav);return;}
                     decoder=null;rendered=wav;
                     try {
-                        player=new MediaPlayer();player.setDataSource(wav.getAbsolutePath());
+                        if(audio==null || audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)throw new java.io.IOException("无法取得播放焦点，请先暂停其他播放器");
+                        focusHeld=true;player=new MediaPlayer();player.setDataSource(wav.getAbsolutePath());
                         player.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){public void onCompletion(MediaPlayer p){status.setText("播放完成。");}});
                         player.prepare();player.start();status.setText("正在播放：MPEG-H → 5.1.4 → Sony 耳形 BRIR → 双耳 PCM。");
                     }catch(Exception e){stop();status.setText("播放失败："+e.getMessage());}
@@ -53,6 +77,6 @@ public final class MpeghPlayerActivity extends Activity {
         }},"MpeghPersonalizedDecode").start();
     }
     private static void discard(File file){if(file!=null){File parent=file.getParentFile();file.delete();parent.delete();}}
-    private void stop(){MpeghDecoder job=decoder;decoder=null;if(job!=null)job.cancel();if(player!=null){player.release();player=null;}discard(rendered);rendered=null;}
+    private void stop(){MpeghDecoder job=decoder;decoder=null;if(job!=null)job.cancel();if(player!=null){player.release();player=null;}if(focusHeld && audio!=null)audio.abandonAudioFocus(focusListener);focusHeld=false;resumeOnFocus=false;discard(rendered);rendered=null;}
     protected void onDestroy(){destroyed=true;stop();super.onDestroy();}
 }

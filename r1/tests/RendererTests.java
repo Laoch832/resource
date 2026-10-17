@@ -46,6 +46,11 @@ public final class RendererTests {
         check(left.azimuth == 330 && left.polar == 90 && Math.abs(left.filters[0][91]) > .1, "reference front-left filter");
         byte[] raw = Arrays.copyOfRange(bytes, 20, bytes.length);
         check(HkiProfile.parse(raw).taps == profile.taps, "raw HKI2 supported");
+        check(HkiProfile.parse(Base64.getMimeEncoder(76,new byte[]{10}).encode(bytes)).taps==profile.taps,"legacy MIME Base64 RIFF");
+        check(HkiProfile.parse(Base64.getEncoder().encode(raw)).taps==profile.taps,"legacy Base64 raw HKI2");
+        for(byte[] invalid:new byte[][]{"aGtpMg==!".getBytes("UTF-8"),"aGtpMg= ".getBytes("UTF-8"),"====".getBytes("UTF-8")}) {
+            try{HkiProfile.parse(invalid);throw new AssertionError("accepted invalid Base64");}catch(IOException expected){checks++;}
+        }
         for (int offset : new int[]{4, 16, 20, 24, 28, 80, 108, 112, bytes.length - 1}) {
             byte[] invalid = bytes.clone(); invalid[offset] ^= 0x7f;
             try { HkiProfile.parse(invalid); throw new AssertionError("accepted mutation at " + offset); }

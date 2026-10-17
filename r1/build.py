@@ -2,7 +2,7 @@
 """Build internal R1 candidates and a private Android runtime probe. No completion claim."""
 from pathlib import Path
 from xml.etree import ElementTree as ET
-import shutil,subprocess,sys,zipfile,tempfile,re,os
+import shutil,subprocess,sys,zipfile,tempfile,re,hashlib,os
 
 ROOT=Path(__file__).resolve().parent.parent
 R1=ROOT/'r1'; BUILD=R1/'build'; TOOLS=ROOT/'tools'
@@ -34,7 +34,32 @@ def sign(apk):
 
 def add(parent,tag,**attrs):return ET.SubElement(parent,tag,{A+k:v for k,v in attrs.items()})
 
+def prepare_inputs():
+    originals=[('sony','sound-connect-13.3.0-original.apk','e6c5ac8085d5cb785a9391b53ef96944c3aac9dcd20512794a4a4847e819e1a2'),('netease','netease-9.6.08-original.apk','4c2e8791c6d00b952332eb698837bbea72bb4384518b75fe895bd4fdccb572d3')]
+    for kind,name,expected in originals:
+        if hashlib.sha256((ROOT/name).read_bytes()).hexdigest()!=expected:raise RuntimeError('Wrong upstream APK: '+name)
+        target=ROOT/'patch'/kind
+        if not (target/'AndroidManifest.xml').is_file():run(['java','-jar',TOOLS/'apktool.jar','d','-s','-f','-o',target,ROOT/name],kind+'-decode.log')
+    sony_source=ROOT/'patch/sony-dex3'
+    if not (sony_source/'smali').is_dir():
+        mini=BUILD/'sony-dex3.apk'
+        with zipfile.ZipFile(ROOT/'sound-connect-13.3.0-original.apk') as src,zipfile.ZipFile(mini,'w') as dst:
+            dst.writestr('classes.dex',src.read('classes3.dex'));dst.writestr('AndroidManifest.xml',src.read('AndroidManifest.xml'))
+        run(['java','-jar',TOOLS/'apktool.jar','d','-r','-f','-o',sony_source,mini],'sony-dex-decode.log')
+    sys.path.insert(0,str(ROOT/'bridge'))
+    import prepare_patch
+    sony_hook=ROOT/'patch/sony/smali_classes3/com/sony/songpal/earcapture/j2objc/immersiveaudio/IaController.smali'
+    if not sony_hook.is_file() or 'Ldev/soundconnect/bridge/SourceBridge;' not in sony_hook.read_text():prepare_patch.patch_sony_dex()
+    for kind,component in [('sony','dev.soundconnect.bridge.HrtfProvider'),('netease','dev.soundconnect.bridge.BridgeActivity')]:
+        app=ET.parse(ROOT/'patch'/kind/'AndroidManifest.xml').getroot().find('application')
+        if not any(n.get(A+'name')==component for n in app):prepare_patch.patch_manifest(kind)
+
 def patch_netease():
+    if not (R1/'netease-dex16/smali').is_dir():
+        mini=BUILD/'netease-dex16.apk'
+        with zipfile.ZipFile(ROOT/'netease-9.6.08-original.apk') as src,zipfile.ZipFile(mini,'w') as dst:
+            dst.writestr('classes.dex',src.read('classes16.dex'));dst.writestr('AndroidManifest.xml',src.read('AndroidManifest.xml'))
+        run(['java','-jar',TOOLS/'apktool.jar','d','-r','-f','-o',R1/'netease-dex16',mini],'netease-dex-decode.log')
     smali=R1/'netease-dex16/smali/com/netease/cloudmusic/media'
     builder=smali/'audioplayer/NCMNativeAudioTrackBuilder.smali'
     s=builder.read_text()
@@ -108,6 +133,7 @@ def main():
     dex=compile_helpers(is_probe)
     if is_probe:probe(dex);return
     if '--refresh' in sys.argv:refresh(dex);return
+    prepare_inputs()
     patch_netease()
     candidates=BUILD/'candidates';candidates.mkdir(exist_ok=True)
     for kind,index,name in [('sony',7,'sound-connect-13.3.0-r1-candidate'),('netease',21,'netease-9.6.08-r1-candidate')]:

@@ -44,7 +44,7 @@ public final class BridgeActivity extends Activity {
         status.setTextIsSelectable(true);
         status.setPadding(0, padding, 0, padding);
         File saved = new File(getFilesDir(), "sony-360ra-profile.bin");
-        status.setText(saved.isFile() ? "已保存耳形参数：" + saved.length() + " 字节。耳形渲染开关：" + (ProfileStore.enabled() ? "开" : "关") + "。更改后请重新开始播放以创建新的音频输出。"
+        status.setText(saved.isFile() ? "已保存耳形参数：" + saved.length() + " 字节。耳形渲染开关：" + (ProfileStore.enabled() ? "开" : "关") + "。更改后请在系统设置中强行停止网易云，再重新打开并播放。"
                 : "参数尚未导入。请先在配套 Sound Connect 实验版中完成耳形分析。");
         layout.addView(status);
         Button importButton = new Button(this);
@@ -157,7 +157,7 @@ public final class BridgeActivity extends Activity {
                     result = "参数已接收并保存在网易云私有目录。\n大小：" + data.length + " 字节\n容器："
                             + ProfileInfo.container(data) + "\nSHA-256：" + ProfileInfo.sha256(data)
                             + "\n采样率：" + parsed.sampleRate + "；方向数：" + parsed.directions.length + "；滤波器长度：" + parsed.taps
-                            + "\n可点击开启耳形渲染，然后重新开始播放。";
+                            + "\n可点击开启耳形渲染；设置完成后请在系统设置中强行停止网易云，再重新打开并播放。";
                 } catch (Exception e) {
                     temporary.delete();
                     result = "导入失败：" + e.getClass().getSimpleName() + "\n" + String.valueOf(e.getMessage())
@@ -174,7 +174,7 @@ public final class BridgeActivity extends Activity {
         final boolean value = enabled;
         new Thread(new Runnable() {public void run() {
             String result;
-            try {ProfileStore.enable(value);result = value ? "耳形渲染已开启。请重新开始播放以创建新输出；仅处理双声道 PCM16 / 浮点 PCM。额外延迟 256 帧，保留 6 dB 音量余量。" : "耳形渲染已关闭。请重新开始播放以创建新输出。";}
+            try {ProfileStore.enable(value);result = value ? "耳形渲染已开启。请在系统设置中强行停止网易云，再重新打开并播放，使新设置生效。支持双声道 PCM16 / 浮点 PCM；额外延迟 256 帧，保留 6 dB 音量余量。" : "耳形渲染已关闭。请在系统设置中强行停止网易云，再重新打开并播放。";}
             catch(Exception e) {result = "开关设置失败：" + e.getMessage();}
             final String message=result;
             runOnUiThread(new Runnable(){public void run(){if(!isFinishing())status.setText(message);busy.set(false);}});

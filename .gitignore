@@ -6,3 +6,11 @@
 __pycache__/
 apk/
 artifacts/
+r1/build*/
+r1/netease-dex16/
+r1/libmpegh*/
+r1/android-*/
+r1/*.riff
+patch/
+tools/
+bridge/build/

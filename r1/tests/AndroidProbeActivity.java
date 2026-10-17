@@ -48,7 +48,15 @@ public final class AndroidProbeActivity extends Activity {
             File source=new File(getFilesDir(),"test.mhas");copy("test.mhas",source);
             File decoded=new MpeghDecoder().decode(this,Uri.fromFile(source));
             require(decoded.length()>48000*4,"MPEG-H decoded PCM");
-            result="PASS: ART convolution tests; AudioTrack PCM16 byte/short/heap/direct and float array/direct; installed NetEase three patched entry points; MPEG-H+BRIR bytes="+decoded.length();
+            int peak=0;
+            try(RandomAccessFile wav=new RandomAccessFile(decoded,"r")) {
+                wav.seek(44);while(wav.getFilePointer()+2<=wav.length())peak=Math.max(peak,Math.abs((int)Short.reverseBytes(wav.readShort())));
+            }
+            require(peak>0,"native MPEG-H output must contain nonzero PCM");
+            MediaPlayer playback=new MediaPlayer();
+            try {playback.setDataSource(decoded.getAbsolutePath());playback.prepare();playback.start();Thread.sleep(100);require(playback.isPlaying(),"decoded MPEG-H WAV playback");}
+            finally {playback.release();}
+            result="PASS: ART convolution tests; AudioTrack PCM16 byte/short/heap/direct and float array/direct; installed NetEase three patched entry points; MPEG-H+BRIR bytes="+decoded.length()+" peak="+peak;
         }catch(Throwable e){result="FAIL: "+e.toString();Log.e("SonyR1Probe","probe failed",e);}
         Log.i("SonyR1Probe",result);
         try(OutputStream out=new FileOutputStream(new File(getFilesDir(),"probe-result.txt"))){out.write(result.getBytes("UTF-8"));}catch(IOException ignored){}
@@ -60,21 +68,26 @@ public final class AndroidProbeActivity extends Activity {
         Class<?> builder=loader.loadClass("com.netease.cloudmusic.media.audioplayer.NCMNativeAudioTrackBuilder");
         AudioTrack created=(AudioTrack)builder.getMethod("create",AudioAttributes.class,int.class,int.class,int.class,int.class,int.class,int.class,int.class).invoke(null,null,0,48000,12,2,16384,1,0);
         require(created.getClass().getName().equals("dev.soundconnect.r1.SoundAudioTrack"),"installed native AudioTrack builder hook");created.play();
-        require(created.write(new byte[4096],0,4096)==4096,"installed builder PCM write");created.pause();created.flush();created.release();
+        require(created.write(new byte[4096],0,4096)==4096,"installed builder PCM write");processed(created);created.pause();created.flush();created.release();
         Class<?> deviceClass=loader.loadClass("com.netease.cloudmusic.media.NEAudioDevice");
         Object device=deviceClass.getConstructor(int.class,int.class,int.class,int.class,int.class,int.class,long.class).newInstance(3,48000,12,2,16384,1,0L);
         java.lang.reflect.Field field=deviceClass.getDeclaredField("mInstance");field.setAccessible(true);
         require(field.get(device).getClass().getName().equals("dev.soundconnect.r1.SoundAudioTrack"),"installed NEAudioDevice constructor hook");
         deviceClass.getMethod("play").invoke(device);
         require(((Integer)deviceClass.getMethod("write",byte[].class,int.class,int.class).invoke(device,new byte[4096],0,4096))==4096,"installed NEAudioDevice PCM write");
+        processed((AudioTrack)field.get(device));
         deviceClass.getMethod("pause").invoke(device);deviceClass.getMethod("flush").invoke(device);deviceClass.getMethod("release").invoke(device);
         Class<?> oldClass=loader.loadClass("com.netease.cloudmusic.media.player.nmAudioTrack");Object old=oldClass.newInstance();
         java.lang.reflect.Method open=oldClass.getDeclaredMethod("createAudioTrack",int.class,int.class);open.setAccessible(true);
         require(((Integer)open.invoke(old,48000,2))==0,"installed legacy AudioTrack open");
         field=oldClass.getDeclaredField("mAudioTrack");field.setAccessible(true);
         require(field.get(old).getClass().getName().equals("dev.soundconnect.r1.SoundAudioTrack"),"installed legacy constructor hook");
-        AudioTrack legacy=(AudioTrack)field.get(old);legacy.play();require(legacy.write(new byte[4096],0,4096)==4096,"legacy PCM write");legacy.pause();legacy.flush();legacy.release();
+        AudioTrack legacy=(AudioTrack)field.get(old);legacy.play();require(legacy.write(new byte[4096],0,4096)==4096,"legacy PCM write");processed(legacy);legacy.pause();legacy.flush();legacy.release();
         Log.i("SonyR1Probe","Installed NetEase all three patched AudioTrack entry points PASS");
+    }
+    private static void processed(AudioTrack track) throws Exception {
+        java.lang.reflect.Field field=track.getClass().getDeclaredField("frames");field.setAccessible(true);
+        require(field.getLong(track)>0,"installed track must execute convolution");
     }
     private static final class InstalledLoader extends dalvik.system.PathClassLoader {
         InstalledLoader(String path,ClassLoader parent){super(path,parent);}

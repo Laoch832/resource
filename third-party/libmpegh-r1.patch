@@ -33,3 +33,96 @@ index 6414ca8..0a4b3c9 100644
      pstr_binaural_rendering->ptr_scratch =
          p_obj_mpegh_dec->p_state_mpeghd->mpeghd_scratch_mem_v;
      err_code = impeghd_binaural_renderer_init(pstr_binaural_rendering, &wav_info,
+diff --git a/decoder/impeghd_binaural_filter_design.c b/decoder/impeghd_binaural_filter_design.c
+index f7a23dd..555b658 100644
+--- a/decoder/impeghd_binaural_filter_design.c
++++ b/decoder/impeghd_binaural_filter_design.c
+@@ -263,9 +263,13 @@ IA_ERRORCODE impeghd_compute_filter_params(ia_td_binaural_ren_param_str *ptr_par
+     len_direct = MAX_LENGTH_DIRECT_FILTER;
+   }
+ 
++  /* R1: a valid long FIR can concentrate its direct energy in a short
++     interval (for example an anechoic impulse with a weak reverberant tail).
++     Pad the direct section to the renderer's minimum block size. Rejecting
++     this otherwise-valid FIR prevented native audio initialization. */
+   if (len_direct < MIN_LENGTH_DIRECT_FILTER)
+   {
+-    return IA_MPEGH_BINAURAL_EXE_FATAL_UNSUPPORTED_FILTER_LENGTH;
++    len_direct = MIN_LENGTH_DIRECT_FILTER;
+   }
+ 
+   fft_size = len_direct;
+diff --git a/test/impeghd_main.c b/test/impeghd_main.c
+index d8d4127..97ee31b 100644
+--- a/test/impeghd_main.c
++++ b/test/impeghd_main.c
+@@ -479,6 +479,7 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
+   /* Error code */
+   IA_ERRORCODE err_code = IA_MPEGH_DEC_NO_ERROR;
+   IA_ERRORCODE err_code_reinit = IA_MPEGH_DEC_NO_ERROR;
++  IA_ERRORCODE r1_process_error = IA_MPEGH_DEC_NO_ERROR;
+ 
+   /* API obj */
+   pVOID pv_ia_process_api_obj;
+@@ -600,6 +601,14 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
+       pstr_in_cfg->num_inp_bytes = i_buff_size;
+       err_code =
+           ia_mpegh_dec_init(pv_ia_process_api_obj, (pVOID)pstr_in_cfg, (pVOID)pstr_out_cfg);
++      /* R1: stop on a fatal initialization error instead of rescanning the
++         complete input byte by byte with the same invalid configuration. */
++      if (err_code & 0x8000)
++      {
++        r1_process_error = err_code;
++        _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "Decoder initialization", err_code);
++        goto exit_path;
++      }
+       if (err_code == IA_MPEGH_DEC_INIT_NONFATAL_INSUFFICIENT_EI_BYTES ||
+           err_code == IA_MPEGH_DEC_INIT_NONFATAL_INSUFFICIENT_LSI_BYTES ||
+           err_code == IA_MPEGH_DEC_INIT_NONFATAL_INSUFFICIENT_BRIR_BYTES)
+@@ -716,6 +725,11 @@ IA_ERRORCODE impeghd_main_process(WORD32 argc, pWORD8 argv[])
+     err_code =
+         ia_mpegh_dec_execute(pv_ia_process_api_obj, (pVOID)pstr_in_cfg, (pVOID)pstr_out_cfg);
+     _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
++    if (err_code & 0x8000)
++    {
++      r1_process_error = err_code;
++      goto exit_path;
++    }
+     if (err_code == IA_MPEGH_DEC_EXE_NONFATAL_INSUFFICIENT_SD_BYTES ||
+         err_code == IA_MPEGH_DEC_EXE_NONFATAL_INSUFFICIENT_HOA_BYTES ||
+         err_code == IA_MPEGH_DEC_EXE_NONFATAL_INSUFFICIENT_METADATA_BYTES)
+@@ -868,7 +882,7 @@ exit_path:
+     free(str_dec_api.input_config.ptr_maep_buf);
+   }
+ 
+-  return err_code;
++  return r1_process_error != IA_MPEGH_DEC_NO_ERROR ? r1_process_error : err_code;
+ }
+ 
+ /**
+@@ -958,6 +972,7 @@ VOID print_usage()
+ IA_ERRORCODE main(WORD32 argc, char *argv[])
+ {
+   FILE *param_file_id = NULL;
++  IA_ERRORCODE r1_status = IA_MPEGH_DEC_NO_ERROR;
+ 
+   WORD8 curr_cmd[IA_MAX_CMD_LINE_LENGTH];
+   WORD32 fargc, curpos;
+@@ -1351,7 +1366,7 @@ IA_ERRORCODE main(WORD32 argc, char *argv[])
+ 
+     printf("\n");
+ 
+-    impeghd_main_process(argc - 1, (pWORD8 *)(&argv[1]));
++    r1_status = impeghd_main_process(argc - 1, (pWORD8 *)(&argv[1]));
+     if (g_pf_out)
+     {
+       fclose(g_pf_out);
+@@ -1392,6 +1407,6 @@ IA_ERRORCODE main(WORD32 argc, char *argv[])
+   {
+     fclose(param_file_id);
+   }
+-  return IA_MPEGH_DEC_NO_ERROR;
++  return r1_status == IA_MPEGH_DEC_NO_ERROR ? 0 : 1;
+ } /* end impeghd_main */
+ /** @} */ /* End of SampleApp */
+\ No newline at end of file
