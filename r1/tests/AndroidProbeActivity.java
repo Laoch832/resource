@@ -55,15 +55,16 @@ public final class AndroidProbeActivity extends Activity {
     }
     private void testInstalledMusicEntries() throws Exception {
         android.content.pm.ApplicationInfo info=getPackageManager().getApplicationInfo("com.netease.cloudmusic",0);
-        ClassLoader loader=new dalvik.system.PathClassLoader(info.sourceDir,getClassLoader());
+        ClassLoader loader=new InstalledLoader(info.sourceDir,getClassLoader());
+        loader.loadClass("dev.soundconnect.r1.ProfileStore").getMethod("initialize",android.content.Context.class).invoke(null,this);
         Class<?> builder=loader.loadClass("com.netease.cloudmusic.media.audioplayer.NCMNativeAudioTrackBuilder");
         AudioTrack created=(AudioTrack)builder.getMethod("create",AudioAttributes.class,int.class,int.class,int.class,int.class,int.class,int.class,int.class).invoke(null,null,0,48000,12,2,16384,1,0);
-        require(created instanceof SoundAudioTrack,"installed native AudioTrack builder hook");created.play();
+        require(created.getClass().getName().equals("dev.soundconnect.r1.SoundAudioTrack"),"installed native AudioTrack builder hook");created.play();
         require(created.write(new byte[4096],0,4096)==4096,"installed builder PCM write");created.pause();created.flush();created.release();
         Class<?> deviceClass=loader.loadClass("com.netease.cloudmusic.media.NEAudioDevice");
         Object device=deviceClass.getConstructor(int.class,int.class,int.class,int.class,int.class,int.class,long.class).newInstance(3,48000,12,2,16384,1,0L);
         java.lang.reflect.Field field=deviceClass.getDeclaredField("mInstance");field.setAccessible(true);
-        require(field.get(device) instanceof SoundAudioTrack,"installed NEAudioDevice constructor hook");
+        require(field.get(device).getClass().getName().equals("dev.soundconnect.r1.SoundAudioTrack"),"installed NEAudioDevice constructor hook");
         deviceClass.getMethod("play").invoke(device);
         require(((Integer)deviceClass.getMethod("write",byte[].class,int.class,int.class).invoke(device,new byte[4096],0,4096))==4096,"installed NEAudioDevice PCM write");
         deviceClass.getMethod("pause").invoke(device);deviceClass.getMethod("flush").invoke(device);deviceClass.getMethod("release").invoke(device);
@@ -71,8 +72,19 @@ public final class AndroidProbeActivity extends Activity {
         java.lang.reflect.Method open=oldClass.getDeclaredMethod("createAudioTrack",int.class,int.class);open.setAccessible(true);
         require(((Integer)open.invoke(old,48000,2))==0,"installed legacy AudioTrack open");
         field=oldClass.getDeclaredField("mAudioTrack");field.setAccessible(true);
-        require(field.get(old) instanceof SoundAudioTrack,"installed legacy constructor hook");
+        require(field.get(old).getClass().getName().equals("dev.soundconnect.r1.SoundAudioTrack"),"installed legacy constructor hook");
         AudioTrack legacy=(AudioTrack)field.get(old);legacy.play();require(legacy.write(new byte[4096],0,4096)==4096,"legacy PCM write");legacy.pause();legacy.flush();legacy.release();
         Log.i("SonyR1Probe","Installed NetEase all three patched AudioTrack entry points PASS");
+    }
+    private static final class InstalledLoader extends dalvik.system.PathClassLoader {
+        InstalledLoader(String path,ClassLoader parent){super(path,parent);}
+        protected synchronized Class<?> loadClass(String name,boolean resolve) throws ClassNotFoundException {
+            if(name.startsWith("dev.soundconnect.r1.") || name.startsWith("com.netease.cloudmusic.media.")) {
+                Class<?> type=findLoadedClass(name);
+                if(type==null)try{type=findClass(name);}catch(ClassNotFoundException ignored){}
+                if(type!=null){if(resolve)resolveClass(type);return type;}
+            }
+            return super.loadClass(name,resolve);
+        }
     }
 }
