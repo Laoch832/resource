@@ -1,7 +1,7 @@
 [
   {
     "file": "netease-9.6.08-r1.apk",
-    "sha256": "85c6f963647a02619eef2509b4ef07316d4147ce5aa27728bc246ad74de6932c",
+    "sha256": "73ba07e6c1e7a1a60bf013afcfe06075ced2597485730e022d8851e19b14b5ec",
     "bytes": 240196699,
     "parts": [
       "netease-9.6.08-r1.apk.part000",
@@ -16,7 +16,7 @@
   },
   {
     "file": "sound-connect-13.3.0-r1.apk",
-    "sha256": "9b4cc2e260f4c45814181b4b0cd176ed1be98301e4528df24afd9dc389d7a783",
+    "sha256": "680d95025c238d3c8b0d4057084196032cbb6b5c40b46c4f3bd189d01a2190a5",
     "bytes": 136567806,
     "parts": [
       "sound-connect-13.3.0-r1.apk.part000",
