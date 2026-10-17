@@ -1,0 +1,41 @@
+name: Publish R1 test artifacts
+on:
+  push:
+    branches: [soundconnect-r1]
+    paths: [.github/workflows/publish-r1.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read signed packages
+        uses: actions/checkout@v4
+        with:
+          ref: soundconnect-r1-assets
+          path: binary-input
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /ci-input/manifest.json
+            /ci-input/*.part*
+      - name: Upload artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p apk
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib
+          root=Path('binary-input/ci-input')
+          for item in json.loads((root/'manifest.json').read_text()):
+              out=Path('apk')/item['file']
+              with out.open('wb') as f:
+                  for part in item['parts']:f.write((root/part).read_bytes())
+              assert hashlib.sha256(out.read_bytes()).hexdigest()==item['sha256']
+          PY
+          (cd apk && sha256sum -c ../evidence/SHA256SUMS.txt)
+          git archive --format=zip --output=R1-source.zip HEAD
+          gh release upload r1-test-1 apk/*.apk evidence/SHA256SUMS.txt R1-source.zip --clobber
